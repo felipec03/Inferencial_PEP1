@@ -1,0 +1,116 @@
+---
+title: 'EP06: ANOVA para muestras correlacionadas'
+author: "Equipo 7"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+library(ggpubr)
+library(gridExtra)
+library(cowplot)
+library(ez)
+library(stats)
+library(nlme)
+library(emmeans)
+```
+
+## Contexto
+> Un equipo de investigadores del área de interacción humano-información está estudiando si el área temática y el nivel de dificultad del problema de información influyen en el tiempo (en segundos) que toma un usuario en formular una consulta de búsqueda para resolver dicho problema. Para ello, han reclutado a un grupo de participantes voluntarios, asignados aleatoriamente a distintos grupos. Cada participante debe resolver tres problemas de información con diferentes niveles de dificultad: baja, media y alta. A su vez, cada grupo debe resolver problemas relacionados a una temática diferente. Los datos recolectados contemplan las siguientes variables:
+
+- **id:** Identificador único de cada participante.
+- **area:** Área temática de los problemas que el participante debe responder. Variable categórica con los niveles Arquitectura, Biología, Computación, Economía, Física, Leyes, Literatura, Matemáticas, Música, Pedagogía, Psicología, Química.
+- **dificultad:** Nivel de dificultad del problema resuelto. Variable categórica con los niveles Baja, Media y Alta.
+- **tiempo:** Tiempo, en segundos, que toma al participante formular la consulta.
+
+### Pregunta
+> En este momento, los investigadores buscan determinar si existen diferencias en el tiempo que tardan los usuarios en formular consultas para problemas con diferente nivel de dificultad en el área de literatura.
+
+#### Lectura de los datos
+```{r}
+datos <- read.csv2("EP06 Datos.csv", sep=",")
+literatura <- datos[datos$area == 'Literatura', ]
+baja <- literatura[literatura$dificultad == 'Baja', ]
+media <- literatura[literatura$dificultad == 'Media', ]
+alta <- literatura[literatura$dificultad == 'Alta', ]
+```
+
+#### Formulación Hipótesis
+Para una correcta enunciación de las hipótesis a docimar, leyendo el contexto vemos que sigue un diseño con medidas repetidas. 
+
+- $H_0$: En promedio, no hay diferencias significativas en los tiempos que demoran los usuarios en formular consultas para problemas de diferentes niveles de dificultad en el área de literatura.
+
+- $H_A$: La media de las diferencias en los tiempos de formulación de consultas para problemas respecto del área de literatura, es diferente para al menos uno de los niveles de dificultad.
+
+Matemáticamente:
+
+$$
+H_0 := \mu_{d \ B-M} = \mu_{d \ B-A} = \mu_{d \ A-M} = 0\\
+H_A := \exists X, Y \in \{ B, M, A \} \ | \ \mu_{d \ X-Y} \neq 0 
+$$
+Donde $\mu_d$ es la media de la diferencia entre los tiempos entre dos grupos.
+
+
+En vista de esto, se realizará una prueba ANOVA de una vía para muestras correlacionadas.
+
+#### Condiciones
+
+1. **La escala con que se mide la variable dependiente tiene las propiedades de una escala de intervalos iguales:** Cómo se mide en segundos, entonces sabemos que respeta la propiedad de una escala de intervalos iguales, más aún sigue una escala de de razón, por lo que es razonablemente exigente.
+
+2. **Las observaciones son independientes al interior de cada muestra:** Puesto que un tiempo de consulta no debería afectar al otro dentro de los mismos niveles de dificultad en la sub-muestra.
+
+3. **Se puede suponer razonablemente que la(s) población(es) de origen sigue(n) una distribución normal.**
+
+```{r}
+qq_baja <- ggqqplot(data = baja,x = "tiempo",main="Grafico Dificultad Baja")
+qq_media <- ggqqplot(data = baja,x = "tiempo",main="Grafico Dificultad Media")
+qq_alta <- ggqqplot(data = alta,x = "tiempo",main="Grafico Dificultad Alta")
+
+# agrupar plots
+plot_grid(qq_baja, qq_media, qq_alta, labels = "AUTO")
+```
+
+4. **La matriz de varianzas-covarianzas es esférica.** Si bien existe una implementación para la prueba de Mauchly de esfericidad, por temas de simplicidad, se procedera a verificar en la prueba de `ezANOVA()`.
+
+#### Prueba ómnibus
+
+Asumiendo esfericidad, se verá con la prueba de Mauchly.
+
+```{r}
+prueba <- ezANOVA(data = literatura, dv = tiempo, wid = id, within = dificultad)
+print(prueba)
+```
+
+Cómo el p-value de la prueba de esfericidad de Mauchly es $\geq 0.05$, con un 95% de confianza no podemos rechazar la invarianza de la diferencia entre las muestras. Entonces, se cumple condición de esfericidad. Mas aún, con la correciones hechas, vemos que el valor de $\epsilon$ entregado por Greenhouse-Geisser y Huynd-Feldt es cercano a $1$, y además el p-value para cada una de las correcciones es ínfimamente pequeño, por lo que podemos con bastante seguridad asumir esfericidad de la muestra.
+
+```{r}
+p_value <- prueba$ANOVA$p
+```
+
+Ahora sí es pertinente evaluar el resultado de la prueba de ANOVA para una vía de muestras correlacionadas, en el que obtenemos un p-valor $`r p_value` \leq 0.05$, entonces los datos indican con un $95 \%$ que podemos rechazar la hipótesis nula.
+
+#### Interpretación de la prueba
+
+Para concluir con la prueba, al rechazar la hipóesis nula en favor de la alternativa, decimos que **la media entre las diferencias en los tiempos de formulación de consultas para problemas respecto del área de literatura, es diferente para al menos uno de los niveles de dificultad**.
+
+Ahora, cómo se sugiere, se hará un análisis de post-hoc para observar más a detalle las diferencias presentes en la muestra.
+
+#### Prueba post-hoc
+Se estima pertinente usar el método de diferencias honestamente significativas de Tukey, entonces siguiendo los pasos:
+
+1. Se arma un modelo lineal mixto
+2. Se estiman las medias respecto del modelo
+3. Se contasta con un método pairwise con ajuste HSD de Tukey.
+
+```{r}
+mixto <- lme(tiempo ~ dificultad, data = datos, random = ~1|id)
+medias <- emmeans(mixto, "dificultad")
+hsd <- contrast(medias, method = "pairwise", adjust = "tukey")
+print(hsd)
+```
+
+A priori, se ve una diferencia significativa entre dificultad Alta y Baja, y Alta y Media.
+
+### Conclusión
+Para concluir con el ejercicio práctico, se concluyó que existe una diferencia significativa en los tiempos medios de consultas respecto a los diversos niveles de dificultad. Con el procedimiento post-hoc, se ve que la menor diferencia yace entre preguntas de nivel bajo y nivel medio, esto hace sentido y se puede atribuir al efecto Dunning-Kruger, donde el sentido común nos dice que claramente toma menos tiempo aprender algo sobre un tópico inicialmente, hasta llegar al medio camino del aprendizaje; en cambio tomaría más tiempo entre el inicio y el final y el medio camino con el final.
