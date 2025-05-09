@@ -1,0 +1,55 @@
+---
+title: 'EP01 (formativo): estadística descriptiva con R'
+author: "Felipe Cubillos y Tomás Carcamo"
+date: "2025-03-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## La wea mala
+
+#### ¿Se distribuye de igual manera la situación ocupacional de los hombres que viven en áreas rurales y quienes viven en áreas urbanas de la RM?
+
+```{r}
+library(kableExtra)
+library(ggpubr)
+
+datos <- read.csv2("EP01 Datos Casen 2017.csv")
+hombres <- datos[datos$sexo == "Hombre", ]
+
+urbanos <- hombres[hombres$zona == "Urbano", ]
+rural <- hombres[hombres$zona == "Rural", ]
+
+# Tabla representativa con kable
+contingencia <- table(datos[["zona"]], datos[["ch1"]])
+contingencia %>%
+  kbl(caption = "Tabla de contingencia") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+# Graficos de torta
+contingenciaUrbano <- as.data.frame(xtabs(~ ch1, data = urbanos))
+contingenciaRural <- as.data.frame(xtabs(~ ch1, data = rural))
+
+g_urbano <- ggpie(contingenciaUrbano, 
+                  x = "Freq",
+                  label = "ch1", 
+                  lab.font = c(5, "plain", "black"),
+                  fill = c("steelblue1", "steelblue2", "steelblue3", "steelblue4"), 
+                  title = "Situación ocupacional de personas en zonas urbanas", 
+                  lab.pos = "out")
+
+g_rural <- ggpie(contingenciaRural, 
+                  x = "Freq",
+                  label = "ch1", 
+                  lab.font = c(5, "plain", "black"),
+                  fill = c("steelblue1", "steelblue2", "steelblue3", "steelblue4"), 
+                  title = "Situación ocupacional de personas en zonas rurales", 
+                  lab.pos = "out")
+
+print(g_urbano)
+print(g_rural)
+```

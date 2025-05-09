@@ -1,0 +1,246 @@
+---
+title: 'EP 03: Poder estadístico en pruebas con medias'
+author: "Equipo 10"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Carga de librerias
+library(ggplot2)
+library(ggpattern)
+library(ggpubr)
+library(pwr)
+library(tidyr)
+```
+
+## Contexto
+> En una planta química hay dos máquinas que envasan detergentes industriales en bidones con un volumen de producto que sigue una distribución normal con desviación estándar de 1 litro. La ingeniera a cargo de la planta debe asegurar que los bidones se están llenando con una media de 10 litros. Pero ella tiene la sospecha de que hay desviaciones en esta media, lo que piensa confirmar usando una muestra aleatoria de 100 envases (50 de cada una de las máquinas). También cree que hay diferencia en el cumplimiento del volumen requerido entre la máquina más antigua y la más moderna, que han de andar por el 90% y 96% de los bidones, respectivamente.
+
+## Respuestas
+
+#### 1) Si la ingeniera piensa rechazar la hipótesis nula cuando la muestra presente una media menor a 9,81 litros o mayor a 10,19 litros, ¿cuál es la probabilidad de que cometa un error de tipo I? Para responder, generen un gráfico de la distribución muestral de las medias hipotetizada en donde se marquen las zonas correspondientes a la probabilidad solicitada, para luego, basándose en este gráfico, calcular el área correspondiente. Tome como ejemplo los scripts presentados en la lectura sobre poder estadístico.
+
+Generando el gráfico basado en las lecturas.
+
+```{r}
+# Parámetros
+mu <- 10
+sd <- 1
+n <- 100
+SE <- sd / sqrt(n)
+lim_inf <- 9.81
+lim_sup <- 10.19
+
+# Rango del gráfico
+x <- mu + c(-6, 5) * SE  # 9.4 a 10.5
+
+# Crear gráfico base
+g1 <- ggplot() + xlim(x) +
+  labs(title = "Distribución muestral bajo hipótesis nula: mu = 10 litros",
+       x = "Media muestral (litros)",
+       y = "Densidad") +
+  theme_minimal()
+
+# Añadir distribución normal
+g1 <- g1 + 
+  stat_function(fun = dnorm, args = list(mean = mu, sd = SE),
+                geom = "area", fill = "pink", alpha = 0.2, color = "red") +
+  geom_vline(xintercept = mu, color = "red")
+
+# Añadir áreas de rechazo
+g2 <- g1 +
+  stat_function(fun = dnorm, args = list(mean = mu, sd = SE),
+                xlim = c(x[1], lim_inf),
+                geom = "area", fill = "coral", alpha = 0.6) +
+  stat_function(fun = dnorm, args = list(mean = mu, sd = SE),
+                xlim = c(lim_sup, x[2]),
+                geom = "area", fill = "coral", alpha = 0.6) +
+  geom_vline(xintercept = c(lim_inf, lim_sup), linetype = "dashed", color = "steelblue")
+
+# Mostrar gráfico
+print(g2)
+```
+
+Vemos que se genera una distribución normal con media centrada en $10$, donde se marca en color las zonas de rechazo, o la probabilidad de cometer error de tipo I, esta se calcula a continuación:
+
+```{r}
+error_izquierdo <- pnorm(lim_inf, mu, SE)
+error_derecho <- pnorm(lim_sup, mu, SE, lower.tail = FALSE)
+error_total <- error_izquierdo + error_derecho
+prob_error_total <- error_total * 100
+```
+
+Al ser una prueba de dos colas, se toma en cuenta la suma de ambas, finalmente se tiene que la probabilidad de cometer un error de tipo uno es de $`r prob_error_total` \%$.
+
+#### 2) Si el verdadero volumen medio de los bidones fuera de 10,25 litros, ¿cuál sería la probabilidad de que la ingeniera, que obviamente no conoce este dato, cometa un error de tipo II? Para responder, agregue al gráfico anterior la verdadera distribución muestral de las medias y marquen (con otro color) la zona correspondiente a la probabilidad solicitada, para luego, basándose en este gráfico, calcular el área correspondiente. También hay ejemplos de este procedimiento en la lectura sobre poder estadístico.
+
+```{r}
+g3 <- g2 + 
+  stat_function(
+    fun = dnorm,
+    args = list(mean = 10.25, sd = SE),
+    geom = "area",
+    fill = "skyblue", alpha = 0.3
+  ) +
+  geom_vline(xintercept = 10.25, color = "blue", linetype = "dashed") +
+
+  stat_function(
+    fun = dnorm,
+    args = list(mean = 10.25, sd = SE),
+    geom = "area",
+    fill = "blue", alpha = 0.5,
+    xlim = c(9.81, 10.19)
+  )
+print(g3)
+
+#beta <- pnorm(10.19, mean = 10.25, sd = SE) - pnorm(9.81, mean = 10.25, sd = SE)
+
+poder_inf <- pnorm(10.19, mean = 10.25, sd = SE, lower.tail = FALSE)
+poder_sup <- pnorm(9.81, mean = 10.25, sd = SE, lower.tail = TRUE)
+
+poder <- poder_inf + poder_sup
+beta <- 1 - poder
+prob_tipo_ii <- beta * 100
+```
+
+Utilizando la función `pnorm()` y basandonos en los gráficos de la lectura, podemos calcular el poder con las áreas de los gráficos esbozados, entonces calculamos el inverso del poder, $1 - (1 - \beta)$, donde $\beta$ es la probabilidad de cometer un error de tipo II, cual vendría siendo $`r prob_tipo_ii` \%$.
+
+*Es posible calcular esto con la estimación que provee R con la función `pwr.norm.test()` y obtener el valor del poder para la distribución asociada a los valores y calcular su complemento para obtener $\beta$, pero esta es una estimación y está sujeto a un error.*
+
+#### 3) Como no se conoce el verdadero volumen medio, genere un gráfico del poder estadístico con las condiciones anteriores, pero suponiendo que el verdadero volumen medio podría variar de 9,7 a 10,3 litros. Hay un ejemplo de este tipo de gráfico en la lectura sobre poder estadístico.
+
+En este caso como nos entregan la información de que el volumen medio puede variar, nos quiere decir que veamos como se comporta el poder a medida que nos acercamos o alejamos de la media nula $(10 L)$
+
+```{r}
+library(ggplot2)
+library(ggpubr)
+
+# Parámetros de la población y la muestra
+media_poblacional <- 10
+desviacion_estandar <- 1
+
+#tamaño de la muestra
+n <- 100
+
+#error estándar
+SE <- desviacion_estandar / sqrt(n)
+
+# Límites de rechazo para la hipótesis nula
+x1 <- 9.81
+x2 <- 10.19
+
+# Inicializar poder
+poder_inf <- 0
+poder_sup <- 1
+
+# Calcular poder_inf si límite inferior no es nulo
+if(!is.null(x1)) {
+  poder_inf <- pnorm(x1, mean = media_poblacional, sd = SE, lower.tail = TRUE)
+}
+
+# Calcular poder_sup si límite superior no es nulo
+if(!is.null(x2)) {
+  poder_sup <- pnorm(x2, mean = media_poblacional, sd = SE, lower.tail = FALSE)
+}
+
+# Calcular poder total
+poder <- poder_inf + poder_sup
+
+# Crear secuencia de valores para x3
+x3 <- seq(9.7, 10.3, 0.01)
+
+# Calcular y3 directamente
+y3 <- sapply(x3, function(media_poblacional) {
+  poder_inf <- 0
+  poder_sup <- 1
+  
+  if(!is.null(x1)) {
+    poder_inf <- pnorm(x1, mean = media_poblacional, sd = SE, lower.tail = TRUE)
+  }
+  if(!is.null(x2)) {
+    poder_sup <- pnorm(x2, mean = media_poblacional, sd = SE, lower.tail = FALSE)
+  }
+  
+  return(poder_inf + poder_sup)
+})
+
+# Crear el data frame para ggplot
+distr3 <- data.frame(x = x3, y = y3)
+
+# Crear el gráfico
+g.3.bilateral <- ggplot(distr3, aes(x, y)) + ylim(c(0, 1))
+g.3.bilateral <- g.3.bilateral +
+ scale_x_continuous(name = "Verdadero volumen medio[L]",
+ breaks = seq(round(min(x3), 1), round(max(x3), 1), 0.1))
+g.3.bilateral <- g.3.bilateral + geom_line()
+g.3.bilateral <- g.3.bilateral + ylab("Poder estadístico")
+g.3.bilateral <- g.3.bilateral + theme_pubr()
+g.3.bilateral <- g.3.bilateral +
+ theme(axis.text.x = element_text(angle = 30, size = 10))
+g.3.bilateral <- g.3.bilateral + ggtitle("Poder vs Volumen")
+
+# Mostrar el gráfico
+print(g.3.bilateral)
+```
+
+En este gráfico podemos apreciar cómo se comporta el poder al alejarse o acercarse a la media nula $(10 L)$.
+El poder aumenta a medida que la verdadera media se aleja del valor de la hipótesis nula $(10L)$, tendiendo a $1$, que indica que siempre se detecta la diferencia entre medias. En cambio **el poder estádistico diminuye a medida que se acerca a $10L$, donde alcanza su valor mínimo que corresponde a la probabilidad de rechazar $H_0$.**
+
+#### 4) Considerando un volumen medio de 10 litros, ¿cuántos bidones deberían revisarse para conseguir un poder estadístico de 0,9 y un nivel de significación de 0,05?
+
+Planteando la siguiente hipótesis, donde buscamos contrastar:
+
+$$
+H_0 := \mu_{true} - \mu_{hip} = 0 \\ 
+H_A := \mu_{true} - \mu_{hip} > 10
+$$
+
+```{r}
+poder_estadistico <- 0.9
+nvl_significancia <- 0.05
+media_real <- 10.25
+volumen_medio <- 10
+
+diferencia <- media_real - volumen_medio
+d_cohen <- diferencia / sd
+
+factores <- pwr.norm.test(d = d_cohen, n = NULL, sig.level = nvl_significancia, alternative = "greater", power = poder_estadistico)
+factores
+muestra_estimada <- ceiling(factores[["n"]])
+```
+
+Sacando el poder estadístico de la prueba Z aplicada al contexto, obtenemos que para un nivel de poder de $0.9$, con un nivel de significancia igual a $0.05$, se obtiene que se necesitaría una muestra de por lo menos $`r muestra_estimada`$ bidones.
+
+#### 5) ¿Alcanzaría esta muestra para detectar la diferencia que la ingeniera sospecha que existe entre las dos máquinas de la planta con al menos las mismas probabilidades de cometer errores?
+
+Cómo nos interesa ver la significancia en una prueba para dos proporciones independientes, debemos contrastar las siguientes hipótesis:
+
+- $H_0$: No existe diferencia entre la proporcion de éxito entre la máquina nueva y la máquina antigua.
+- $H_A$: Existe una diferencia entre la proporción de éxito entre la máquina nueva y la máquina antigua.
+
+Matemáticamente, planteamos lo siguiente:
+
+```{r}
+p_antigua <- 0.9
+p_moderna <- 0.96
+h_cohen <- ES.h(p_antigua, p_moderna)
+
+```
+
+$$
+H_0 := p_{a} = p_n \\ 
+H_A := p_{a} < p_n
+$$
+
+Con la hipótesis planteada, vemos los parámetros utilizados para efectuar la prueba de 2 proporciones de igual tamaño.
+
+```{r}
+prueba_poder <- pwr.2p.test(h=h_cohen, sig.level=0.05, power=poder_estadistico, alternative="less", n = NULL)
+print(prueba_poder)
+muestra_requerida <- ceiling(prueba_poder[["n"]])
+```
+
+Finalmente, para que se cumpla la hipótesis la muestra hipotética para un poder de $0.9$ debe ser de mínimo $`r muestra_requerida`$ muestras. Este valor, al ser mayor que las $100$ muestras inicialmente planteadas, no sería suficiente para poder verificar la hipótesis con un poder estadístico de $0.9$ y un nivel de significancia de $0.05$.

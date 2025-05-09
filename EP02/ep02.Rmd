@@ -1,0 +1,197 @@
+---
+title: 'EP02 (formativo): inferencia con una y dos muestras'
+author: "Felipe Cubillos, Tomás Cárcamo y Diego Gomez"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Lectura del dataset
+
+```{r}
+datos <- read.csv2("EP02 Datos(1).csv")
+summary(datos)
+```
+
+## Preguntas a Resolver
+
+#### 1) El Comité Olímpico cree que el mejor tiempo medio de los atletas de raza negra después de ingresar al programa de entrenamiento es 12,9 segundos. ¿Soportan los datos esta afirmación?
+
+Se debe de establecen las hipótesis a contrastar de la siguiente manera:
+Para la hipótesis nula, queremos comprobar si el mejor tiempo medio de los atletas de raza negra después de ingresar al programa de entrenamiento equivale a $12,9$.
+$$
+H_0 := \mu = 12,9 \\
+H_a := \mu \neq 12,9
+$$
+En cambio, para la hipótesis alternativa, tenemos lo contrario, osease que el mejor tiempo medio de los atletas de raza negra desoupes de ingresar al programa, de entrenamiento NO es de $12,9$ segundos.
+
+Entiéndase tiempos después de ingresar al programa, como la columna posteriores.
+
+```{r}
+raza_negra <- datos[datos$Raza == "Negra",]
+summary(raza_negra)
+
+tiempo_media_muestra <- mean(raza_negra$Posterior)
+
+# Entre los atletas, a menos que se tropiezen unos con otros, el rendmiento de un atleta no influye en el otro 
+
+# Antes de hacer la prueba, se debe observar normalidad en la muestra
+
+shapiro.test(raza_negra$Posterior)
+
+# Con los resultados, entonces
+# Para verificar si es que soporta los datos, se empleará t-test
+
+# Antes del test revisar si es que se necesita desviacion estandar
+# En caso de que sea menos de 30.
+
+alpha <- 0.05
+prueba = t.test(x=raza_negra$Posterior, conf.level = 1-alpha, alternative = "two.sided")
+p_value = prueba$p.value
+
+```
+
+Con los resultados vistos, el valor $p=`r p_value`$.
+
+
+#### 2) ¿Sugieren los datos que la mejor marca de los atletas de raza blanca se reduce en promedio menos de 2,8 segundos tras el entrenamiento?
+
+Antes de ir de lleno al análisis, debemos enunciar correctamente las hipótesis a contrastar:
+
+- $H_0$: La mejor marca de los atletas de raza blanca NO se reduce en promedio menos de 2,8 segundos.
+- $H_a$: La mejor marca de los atletas de raza blanca se reduce en promedio menos de 2,8 segundos.
+
+De manera más formal, debemos contrastar:
+
+$$
+H_0 := \mu \geq 2.8 \\
+H_a := \mu < 2.8
+$$
+
+Se utilizará la prueba t-student, ahora tomando en consideración la media de las diferencias entre los tiempos previos con los tiempos posteriores. $\mu_1 - \mu_2$
+
+```{r}
+raza_blanca <- datos[datos$Raza == "Blanca", ]
+
+columna_diferencia_blanca <- raza_blanca$Previo - raza_blanca$Posterior
+```
+
+Se revisan condiciones de independencia: entre tiempos y observaciones no hay incidencia alguna entre los atletas respecto de los tiempos finales, a menos claro que un atleta tropieze y bote a otro.
+
+```{r}
+# Se revisa normalidad
+shapiro.test(columna_diferencia_blanca)
+
+# Al tener las dos condiciones, se hace la prueba t respecto a la variable
+
+resultado_prueba = t.test(columna_diferencia_blanca, mu = 2.8, alternative = "less", conf.level = 1 - alpha)
+p_value = resultado_prueba$p.value
+print(resultado_prueba)
+```
+
+De la prueba, notamos que el valor $p$ correspondiente es de $`r p_value`$. Cómo $p > \alpha$, no tenemos suficiente evidencia para rechazar la hipótesis nula $H_0$. Por lo tanto, podemos afirmar con un $95\%$ de confianza, que los datos sugieren que NO se reduce en promedio menor a 2,8 segundos para atletas de raza blanca.
+
+#### 3) ¿Es posible afirmar que, en promedio, los atletas de raza blanca superan a los de raza oriental por más de 1,6 segundos después del entrenamiento?
+
+Ántes de iniciar, se plantea las hipótesis a contrastar
+
+- $H_0$: En promedio, los atletas de raza blanca NO superan a los de raza oriental por más de 1,6 segundos después del entrenamiento.
+- $H_a$: En promedio, los atletas de raza blanca superan a los de raza oriental por más de 1,6 segundos después del entrenamiento.
+
+Más formalmente, se puede definir cómo.
+$$
+H_0 := \mu_{blanca} - \mu_{oriental} >=  1,6 \\
+H_a := \mu_{blanca} - \mu_{oriental} <  1,6
+$$
+Para emplear un test t-student, debemos verificar las siguientes condiciones:
+- Cada muestra cumple condición para una prueba t
+- Las muestras son independientes entre sí.
+
+Cómo sabemos que el rendimiento de una raza no afecta a la otra, debemos revisar condición de normalidad e independencia de observaciones.
+Esto ya fué previamente hecho en los ítemes anteriores. Ya se verificó anteriormente la condición de normalidad para atletas de raza blanca, solo faltaría probar para los atletas de raza oriental.
+
+```{r}
+raza_oriental <- datos[datos$Raza == "Oriental", ]
+columna_diferencia_oriental = raza_oriental$Previo - raza_oriental$Posterior
+prueba = shapiro.test(columna_diferencia_oriental)
+p_valor = prueba$p.value
+
+```
+
+Cómo el valor $p = `r p_valor`$, entonces no podemos rechazar la normalidad de la muestra de atletas de raza oriental.
+
+Con esto listo, podemos efectuar la prueba de t-student para dos muestras independientes.
+
+```{r}
+prueba = t.test(x = raza_blanca$Posterior, y = raza_oriental$Posterior, paired = FALSE, alternative = "less", mu = 1.6, conf.level = 1 - alpha)
+p_valor = prueba$p.value
+```
+
+Para la prueba efectuada se asocia un valor $p = `r p_valor`$. Cómo $p < \alpha$, podemos rechazar con un $95\%$ de confianza la $H_0$ en favor de $H_a$. En otras palabras, los datos sugieren que después del entrenamiento existe una diferencia de al menos 1,6 segundos entre atletas de raza blanca respecto a los atletas de raza oriental.
+
+
+#### 4) ¿Será cierto que hay más atletas de raza oriental que redujeron sus mejores marcas en al menos 4,7 segundos que atletas de raza negra que lo hicieron en al menos 1,7 segundos?
+
+Se plantean las hipótesis a contrastar, en este caso, tratando con la diferencia entre las proporciones. Se definen: $p_0$ como la tasa de atletas de raza oriental con mejorías de 4,7 segundos o más; y $p_1$ como la proporción de atletas de raza negra con mejorías de al menos 1,7 segundos.
+
+- $H_0:$ No hay diferencia entre la tasa de éxito de los atletas de raza oriental y la tasa de éxito de los atletas de raza negra.
+- $H_A:$ La tasa de éxito de los atletas de raza oriental es superior a la de los atletas de raza negra. 
+
+$$
+H_0 := p_0 - p_1 = 0 \\
+H_A := p_0 - p_1 > 0
+$$
+
+Primero se comprueban las condiciones antes de realizar una prueba de proporciones.
+Como se ha mencionado en los incisos anteriores, las observaciones de la muestra son independientes por su naturaleza de ser tiempos obtenidos por atletas individualmente.
+
+Se comprueba la condición éxito-fracaso:
+
+
+```{r echo =F}
+data <- read.csv2("EP02 Datos(1).csv")
+
+
+data$Diff <- data$Previo - data$Posterior
+data_rnegra <- data[data$Raza == "Negra",]
+data_roriental <- data[data$Raza == "Oriental",]
+
+# hay uno con diff = 5.053... ¿lo contamos? :P
+data_roriental$Exito <- data_roriental$Diff >= 4.7
+data_rnegra$Exito <- data_rnegra$Diff >= 1.7
+
+exitos_roriental <- nrow(data_roriental[data_roriental$Exito,])
+fracasos_roriental <- nrow(data_roriental) - exitos_roriental
+
+exitos_rnegra <- nrow(data_rnegra[data_rnegra$Exito,])
+fracasos_rnegra <- nrow(data_rnegra) - exitos_rnegra
+
+cat("---ORIENTAL---\n")
+cat("Exitos: ", exitos_roriental, "\n")
+cat("Fracasos: ", fracasos_roriental, "\n")
+
+cat("---NEGRA---\n")
+cat("Exitos: ", exitos_rnegra, "\n")
+cat("Fracasos: ", fracasos_rnegra, "\n")
+
+
+# y ahora qué?
+```
+
+Si bien no se cumple la condición de éxito-fracaso, de todas maneras se hace la prueba para dos muestras independientes.
+
+```{r}
+alpha <- 0.05
+exitos <- c(exitos_roriental, exitos_rnegra)
+totales <- c(nrow(data_roriental), nrow(data_rnegra))
+
+tstprop <- prop.test(exitos, totales, alternative = "greater", conf.level = 1 - alpha)
+p_valor = tstprop$p.value
+tstprop
+```
+
+Para la prueba efectuada se asocia un valor $p = `r p_valor`$. Cómo $p < \alpha$, podemos rechazar con un $95\%$ de confianza la $H_0$ en favor de $H_a$. En otras palabras, los datos sugieren la tasa de éxito de los atletas de raza oriental es superior a la de los atletas de raza negra respecto a los atletas de raza oriental en al menos $1,7$ segundos.

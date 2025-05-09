@@ -1,0 +1,66 @@
+---
+title: "EP002"
+author: "Diego Gómez"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+Pregunta 4 - ¿Será cierto que hay más atletas de raza oriental que redujeron sus mejores marcas en al menos 4,7 segundos que atletas de raza negra que lo hicieron en al menos 1,7 segundos?
+
+
+```{r}
+data <- read.csv2("EP02 Datos(1).csv")
+summary(data)
+```
+
+Se plantean las hipótesis a contrastar, en este caso, tratando con la diferencia entre las proporciones. Se definen: $p_0$ como la tasa de atletas de raza oriental con mejorías de 4,7 segundos o más; y $p_1$ como la proporción de atletas de raza negra con mejorías de al menos 1,7 segundos.
+
+- $H_0:$ No hay diferencia entre la tasa de éxito de los atletas de raza oriental y la tasa de éxito de los atletas de raza negra. Matemáticamente $p_0 - p_1 = 0$
+- $H_A:$ La tasa de éxito de los atletas de raza oriental es superior a la de los atletas de raza negra. Matemáticamente $p_0 - p_1 > 0$
+
+Primero se comprueban las condiciones antes de realizar una prueba de proporciones.
+Como se ha mencionado en los incisos anteriores, las observaciones de la muestra son independientes por su naturaleza de ser tiempos obtenidos por atletas individualmente.
+
+Se comprueba la condición éxito-fracaso:
+
+
+```{r echo =F}
+data$Diff <- data$Previo - data$Posterior
+data_rnegra <- data[data$Raza == "Negra",]
+data_roriental <- data[data$Raza == "Oriental",]
+
+# hay uno con diff = 5.053... ¿lo contamos? :P
+data_roriental$Exito <- data_roriental$Diff >= 4.7
+data_rnegra$Exito <- data_rnegra$Diff >= 1.7
+
+exitos_roriental <- nrow(data_roriental[data_roriental$Exito,])
+fracasos_roriental <- nrow(data_roriental) - exitos_roriental
+
+exitos_rnegra <- nrow(data_rnegra[data_rnegra$Exito,])
+fracasos_rnegra <- nrow(data_rnegra) - exitos_rnegra
+
+cat("---ORIENTAL---\n")
+cat("Exitos: ", exitos_roriental, "\n")
+cat("Fracasos: ", fracasos_roriental, "\n")
+
+cat("---NEGRA---\n")
+cat("Exitos: ", exitos_rnegra, "\n")
+cat("Fracasos: ", fracasos_rnegra, "\n")
+
+
+# y ahora qué?
+```
+
+```{r}
+library(dplyr)
+
+alpha <- 0.05
+exitos <- c(exitos_roriental, exitos_rnegra)
+totales <- c(nrow(data_roriental), nrow(data_rnegra))
+
+tstprop <- prop.test(exitos, totales, alternative = "greater", conf.level = 1 - alpha)
+tstprop
+```
+
+
+

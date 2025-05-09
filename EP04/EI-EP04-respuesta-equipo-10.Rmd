@@ -1,0 +1,181 @@
+---
+title: "EP04: Inferencia no paramétrica con frecuencias"
+author: Equipo 10
+output: html_document
+date: "2025-04-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Carga de librerias
+library(ggpattern)
+library(ggpubr)
+library(pwr)
+library(tidyr)
+library(rstatix)
+library(RVAideMemoire)
+```
+
+### Pregunta 1
+> Una agencia de marketing desea determinar si hay una diferencia significativa en la efectividad de tres estrategias publicitarias utilizadas para promocionar un nuevo producto. Para ello, se ha recopilado información de personas que fueron expuestas a las tres estrategias publicitarias, registrando si mostraron una aceptación (A) o rechazo (R) a cada una de ellas. 
+> **¿Qué puede concluir la agencia de marketing sobre la efectividad de las estrategias publicitarias para promover el nuevo producto?**
+*Indicación: obtenga la muestra de 50 personas a partir del archivo “EP04 Datos.csv” que se encuentra en el directorio compartido, usando la semilla 255. Considere un nivel de significación α=0,05.*
+
+```{r}
+# Establecer semilla para reproducibilidad
+set.seed(255)
+
+# Leer datos y obtener muestra de 50 IDs (no filas)
+datos <- read.csv2("EP04 Datos.csv")
+ids_muestra <- sample(datos$id, 50)  # Muestrear 50 IDs únicos
+muestra <- datos[datos$id %in% ids_muestra, ]
+```
+Para este caso, estimamos utilizar una prueba Q de Cochran.
+Ántes de efectur la prueba se revisan condiciones para realizar la prueba estimada.
+
+- La variable de respuesta es dicotómica (Aceptación o Rechazo)
+- La variable independiente, o tratamiento es categórico.
+- Las observaciones no tienen incidencia por sobre las otras.
+- El tamaño de la muestra vendría a ser $50 \times 3 = 150 \geq 24$.
+
+Habiendo verificado las condiciones previas, se procede a hacer el test.
+
+No sin antes, especificar las hipótesis a contrastar:
+
+- $H_0$: La proporción de gente que dice aprovar la estrategia de marketing es la misma para cada una de las estrategias.
+- $H_A$: La proporción de gente que dice aprovar la estrategia de marketing es la distinta para al menos una de las estrategias.
+
+```{r}
+# Transformar a formato largo (3 filas por ID)
+
+muestra_mod <- muestra |> 
+  pivot_longer(
+    cols = c("estrategia_1", "estrategia_2", "estrategia_3"),
+    names_to = "estrategia",
+    values_to = "resultado"
+  ) |> 
+ mutate(
+    id = factor(id),
+    resultado = factor(resultado)
+  )
+
+# Realizar la prueba de Cochran Q
+
+significacion <- 0.05
+prueba_q <- cochran.qtest(resultado ~ estrategia | id, data = muestra_mod, alpha = significacion)
+
+valor_p <- prueba_q$p.value
+
+print(prueba_q)
+```
+
+**Conclusión:** Cómo se obtiene un valor $p =  `r valor_p` \geq 0.05$, entonces no podemos rechazar la hipótesis nula. Osease, no podemos rechazar que la proporción de gente es la misma en términos de aprobación o rechazo para cada una de las estrategias de marketing sean todas iguales.
+
+**Observación:** Cómo fué estipulado en la lectura, se sabe que al ser una prueba no paramétrica, no entrega tanta información cómo una prueba de caracter paramétrico. Si bien los datos sugieren que no existe diferencia entre las estrategias, no sabemos con certeza los valores en cuestión de la prueba. Esto es más evidente cuando se rechaza $H_0$ y se quiere determinar cual tiene prevlaneic apor sobre otra.
+
+### Pregunta 2
+> Se llevó a cabo una encuesta para investigar si hay una distribución homogénea de pasatiempos favoritos entre dos grupos de personas: hombres y mujeres. Se seleccionaron aleatoriamente 30 personas de cada grupo y se les preguntó sobre sus pasatiempos favoritos, obteniéndose que entre los hombres 9 prefieren actividades relacionadas con la lectura, 14 con el deporte y 7 con música; mientras que entre las mujeres 7 se inclinan por actividades relacionadas con la música, 5 con la lectura y 18 con deportes. **¿Existe evidencia suficiente para concluir que la distribución de los pasatiempos favoritos es la misma entre hombres y mujeres?**
+
+Debemos primero definir las hipótesis a contrastar:
+
+- $H_0$: Hombres y mujeres tienen las mismas preferencias con respecto a sus pasatiempos favoritos.
+- $H_A$: Hombres y mujeres tienen distintas preferencias con sus pasatiempos favoritos.
+
+Como sabemos que las 30 personas fueron seleccionadas de forma aleatoria, podemos considerar que se cumple la condición de independencia, por lo que se puede aplicar la prueba $\chi^2$ de homogeneidad. Además, para cada celda se tiene una cantidad mayor o igual a 5, por lo que cumple las condiciones para efectuar la prueba.
+
+```{r}
+parametros <- c("Lectura","Deporte","Música")
+hombres <- c(9,14,7)
+mujeres <- c(5,18,7)
+tabla <- as.table(rbind(hombres, mujeres))
+dimnames(tabla) <- list(sexo = c("Hombres", "Mujeres"),
+                        pasatiempos = c("Lectura","Deporte","Música"))
+
+print(tabla)
+
+prueba <- chisq.test(tabla)
+p_value_chi <- prueba$p.value
+print(prueba)
+```
+
+Cómo el p-valor obtenido por la prueba de homogeneidad es de $`r p_value_chi` \geq 0.05$, no podemos rechazar la hipótesis nula en favor de la hipótesis alternativa. En el contexto de la pregunta, no podemos aseverar que hombres y mujeres tienen distintas preferencias con sus pasatiempos de preferencia, más bien los datos sugieren que poseen preferencias similares.
+
+### Pregunta 3
+> Se realiza un estudio sobre las preferencias de consumo de dos tipos de chocolate, “Chocolate Blanco” y “Chocolate Negro”, entre dos grupos etarios distintos: personas adultas y personas menores de edad (niños, niños y adolecentes). Después de entrevistar a un total de 13 adultos y 17 menores de edad, se encontró que 2 personas adultas y 9 menores prefieren el chocolate negro. **¿El tipo de chocolate preferido está influenciado por el grupo etario de las consumidoras y los consumidores?**
+
+Se nos pregunta sobre si están relacionadas dos variables categóricas en la encuesta llevada a cabo, esto nos da la posibilidad de dos pruebas distintas, la prueba exacta de Fisher o $\chi^2$ de independencia. En este caso la poca cantidad de muestras y la habilidad de ordenar las variables categóricas en una matriz de 2x2 nos indica realizar una prueba de Fisher.
+
+Antes de establecer hipótesis y llevar a cabo la prueba es necesario revisar las condiciones para ver sí somos capaces de conducir la prueba exacta de Fisher.
+
+- Ambas variables categóricas son a la vez binarias, donde el rango etario es entre Adultos y Menores de edad. Y la preferencia es entre chocolate blanco o negro
+- No se comenta sobre el método de selección de la muestra, pero supondremos que fue seleccionado de manera aleatoria y la decision del adulto y/o menor no afecta a otros
+
+Con las condiciones revisadas, se escriben las hipotesis:
+
+$H_0$ : El rango etario y la preferencia de chocolate son independientes.
+
+$H_a$ : El rango etario y la preferencia de chocolate no son independientes.
+
+
+```{r}
+
+Edad <- c(rep("Adulto",13),rep("Menor",17))
+Chocolate<-c(rep("Negro",2),rep("Blanco",19),rep("Negro",9))
+Resultado<- factor(Chocolate, levels = c("Blanco","Negro"))
+datos <- data.frame(Resultado,Edad)
+tabla <- xtabs(~., datos)
+print(tabla)
+
+prueba<- fisher.test(tabla)
+print(prueba)
+
+p_valor_fisher <- prueba$p.value
+```
+
+Con un p-value $`r p_valor_fisher`$ no somos capaces de rechazar la hipotesis nula en favor de la alternativa considerando un nivel de significancia de $0.05$, por lo que declaramos que las variables de rango etario y preferencia de chocolate no estan asociadas.
+
+### Pregunta 4
+> Una organización dedicada a la rehabilitación de villanos ha observado que muchos de ellos ingresan al programa con niveles elevados de hostilidad. Para abordar este problema, decidieron implementar un nuevo programa de bienvenida diseñado para reducir la hostilidad y facilitar la reintegración a la sociedad. Para evaluar la efectividad de este programa, se reclutó a un grupo de 40 villanos a quienes se les midió el nivel de hostilidad (alto o bajo) antes y después de participar en el programa de bienvenida. Los resultados se presentan a continuación:
+
+- 8 villanos no mostraron hostilidad ni antes ni después.
+- 8 villanos que inicialmente mostraban hostilidad dejaron de hacerlo.
+- 20 villanos mantuvieron un elevado nivel de hostilidad.
+- 4 villanos que no mostraban hostilidad después del programa se volvieron hostiles.
+
+> **¿Qué se puede concluir acerca de la efectividad del nuevo programa de bienvenida para reducir la hostilidad en los villanos?**
+
+Debido a la naturaleza del estudio, somos capaces de determinar que para comprobar la efectividad programa es necesario efectuar una prueba de McNemar. Donde para ello es necesario revisar las condiciones previas para llevar a cabo el test.
+
+En primer caso, las muestras tienen que ser apareadas, en este caso se mide el nivel de hostilidad antes y después del mismo sujeto que ha pasado por el programa, además, debido a la naturaleza de cómo se mide este nivel, también son variables categoricas dicotomicas debido a que solo existen dos categorias donde los villanos caen antes y despues del programa.
+
+También se pide que la cantidad de (en este contexto) personas que hayan mostrado cambios en el experimento sea como minimo mayor a 10, y recomendado mayor a 25. En este caso la cantidad de villanos que mostraron cambios son 12, lo que significa que cumple el minimo pero no pasa el nivel recomendado, esto implicaría que la fuerza asociada a la prueba efectuada no está en su máximo efecto.
+
+Y por último, que los datos puedan ser ordenados en una tabla de contingencia 2x2, lo cual es realizado mas adelante.
+
+Con todo lo previo considerado, se determinan las hipotesis utilizando un nivel de significancia de $\alpha = 0.05$:
+
+$H_0$ : El programa no genera cambios de hostilidad significativos en la cantidad de villanos
+
+$H_a$: EL programa genera cambios de hostilidad significativos en el comportamiento de los villanos.
+
+```{r}
+# creacion de tabla con datos
+Muestra <- seq(1:40)
+despues <- c(rep("Hostil",24),rep("No Hostil",16))
+antes <- c(rep("Hostil",20),rep("No hostil",12),rep("Hostil",8))
+tabla <- table(antes,despues)
+print(tabla)
+
+# prueba de mcnemar para la tabla de confusion
+prueba_1 <- mcnemar.test(tabla,correct=FALSE)
+print(prueba_1)
+
+p_valor_mcnemar <- prueba_1$p.value
+#print(p_valor_mcnemar)
+```
+
+Analizando los resultados, se obtiene un $p$ valor de $`r p_valor_mcnemar`$, comparandolo con nuestro nivel de significanciade 0.05 ($p > `r p_valor_mcnemar`$), **no somos capaces de rechazar la hipotesis nula en favor de la alternativa, lo que significa que no somos capaces de asegurar que el programa haya tenido un impacto significativo en cambiar el nivel de hostilidad de los villanos.**
+
+*Eso si, considerar que debido a que la cantidad de villanos que mostraron cambios es menor a 25, este test tiene menos poder estadistico, y lo recomendado es utilizar un mid p-value, pero queda fuera del alcance de esta asignatura.*
+

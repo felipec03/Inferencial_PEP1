@@ -1,0 +1,254 @@
+---
+title: "EP07: Métodos no paramétricos para enfrentar datos numéricos problemáticos"
+author: "Equipo 7"
+date: "2025-04-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Contexto
+> En el trabajo de título de una estudiante del DIINF se reportan tiempos de ejecución (en milisegundos) y la cercanía con la solución óptima (en por ciento) de la mejor solución encontrada con tres versiones de un algoritmo genético para resolver instancias del problema del vendedor viajero disponibles en repositorios públicos. Ahora debe enfrentar el análisis de estos datos, por que está solicitando ayuda de las y los estudiantes de Estadística Inferencial.
+
+## Preguntas
+Carga de datos:
+
+```{r}
+library(ggpubr)
+library(dplyr)     
+library(ggplot2)   
+library(DescTools)
+datos <- read.csv2("EP07 Datos.csv", sep = ",")
+head(datos)
+```
+
+### Pregunta 1
+> Observando los datos, la memorista sospecha que hay diferencias significativas en el tiempo de ejecución entre las versiones B y C del algoritmo cuando las instancias tienen 60 o más nodos. ¿Los datos respaldan la intuición de la memorista? Para responder, filtren los datos para tener las instancias con 60 o más nodos y seleccionen las columnas de los tiempos de ejecución de las versiones B y C en formato ancho. Usando como semilla el valor 71, obtenga muestras aleatorias independientes de 22 tiempos registrados por la versión B y 19 tiempos registrados por la versión C del algoritmo. Realicen un análisis estadístico pertinente (enunciar hipótesis, revisar condiciones, seleccionar pruebas ómnibus y post-hoc según corresponda) para responder la pregunta planteada, utilizando pruebas no paramétricas de ser necesario.
+
+Prinero se obtienen las muestras para las instancias B y C.
+
+```{r}
+instancias60 <- datos[datos$n.nodos >= 60, ]
+
+set.seed(71)
+muestraB <- sample(instancias60$tiempo.B, 22)
+muestraC <- sample(instancias60$tiempo.C, 19)
+```
+
+Dado que se quiere investigar la diferencia entre las medias de dos muestras aleatorias a priori se puede intentar hacer un test t-Student para la diferencia entre dos muestras independientes, vemos que se cumple la condición de observaciones y muestras independientes, se verá a continuación la condición de normalidad de cada muestra.
+
+```{r}
+gB <- ggqqplot(
+  data = data.frame(muestraB),
+  x = "muestraB",
+  color = "steelblue",
+  xlab = "Teórico",
+  ylab = "Muestra",
+  title = "Gráfico Q-Q para la muestra B"
+)
+print(gB)
+
+gC <- ggqqplot(
+  data = data.frame(muestraC),
+  x = "muestraC",
+  color = "steelblue",
+  xlab = "Teórico",
+  ylab = "Muestra",
+  title = "Gráfico Q-Q para la muestra C"
+)
+print(gC)
+
+normB <- shapiro.test(muestraB)
+normC <- shapiro.test(muestraC)
+
+pvalorB <- normB$p.value
+pvalorC <- normC$p.value
+```
+
+Viendo los gráficos, uno estaría tentado a concluir que ambas muestras provienen de una población que sigue una distribución normal, formalizando con el test de Shapiro-Wilk vemos que para la versión C del algoritmo este tiene un p-valor de $`r pvalorC$, por lo que se rechaza la normalidad de la muestra C, así no podemos realizar un test t-Student.
+
+En vista de esto, se hará un test U de Mann-Whitney, que no requiere de la condición de normalidad para ambas muestras, se debe acotar que al ser una prueba de cáracter ómnibus no entrega la misma información que pudo haber entregado la prueba t-Student.
+
+Ahora, se verán las hipótesis a docimar.
+
+- $H_0$: en promedio, no hay diferencias en los tiempos entre la versión B y C del algoritmo genético. 
+- $H_A$: existe una diferencia significativa en los tiempos de ejecución entre la versión B y C del algoritmo genético.
+
+```{r}
+prueba <- wilcox.test(muestraB, muestraC, alternative = "two.sided", conf.level = 0.95)
+pvalorPrueba <- prueba$p.value
+```
+
+Con la prueba hecha, se obtiene un p-valor de $`r pvalorPrueba`$, esto finalmente nos indica que rechazamos con un $95\%$ de confianza la hipótesis nula, por lo que los datos sugieren que existe una diferencia significativa en los tiempos de ejecucion entre la versión B y C del algoritmo genético.
+
+Se toma en consideración que es posible utilizar una transformación de Box-Cox para ambas muestras para realizar la prueba t-Student correspondiente.
+
+```{r}
+lambdaB <- BoxCoxLambda(muestraB, lower = -4, upper = 4)
+lambdaC <- BoxCoxLambda(muestraC, lower = -4, upper = 4)
+
+transformacionB <- BoxCox(muestraB, lambdaB)
+transformacionC <- BoxCox(muestraC, lambdaC)
+
+diferencia <- transformacionB - transformacionC
+
+pruebastudent <- t.test(x = transformacionB, y = transformacionC, paired = FALSE, alternative = "two.sided", mu = 0, conf.level = 0.05)
+print(pruebastudent)
+```
+
+### Pregunta 2
+> La memorista también sospecha que, al comparar las mismas instancias de iguales características, las mejores soluciones encontradas por las versiones B y C tienen rendimientos distintos. ¿Estará en lo cierto? Para responder, filtren los datos para tener las instancias con 60 o más nodos y seleccionen las columnas con el mejor rendimiento de las versiones B y C en formato ancho. Usando como semilla el valor 33, obtengan una muestra aleatoria de 20 instancias. Realicen un análisis estadístico pertinente (enunciar hipótesis, revisar condiciones, seleccionar pruebas ómnibus y post-hoc según corresponda) para responder la pregunta planteada, utilizando pruebas no paramétricas de ser necesario.
+
+
+```{r}
+#datos
+datos <- read.csv("EP07 Datos.csv")
+
+#filtrar los datos con 60 o mas nodos
+rendimiento <- datos %>%
+  filter(n.nodos >= 60) %>%
+  select(mejor.B, mejor.C)
+
+#fijar semilla y tomar muestra de 20 instancias
+set.seed(33)
+muestra <- rendimiento %>% slice_sample(n = 20)
+
+
+#evaluar normalidad de las diferencias (Shapiro-Wilk)
+
+diferencias <- muestra$mejor.B - muestra$mejor.C
+shapiro_resultado <- shapiro.test(diferencias)
+
+cat("\nResultado de la prueba de normalidad (Shapiro-Wilk):\n")
+print(shapiro_resultado)
+
+#prueba de Wilcoxon para muestras pareadas
+
+wilcoxon_resultado <- wilcox.test(muestra$mejor.B, muestra$mejor.C, paired = TRUE)
+cat("\nResultado de la prueba de Wilcoxon:\n")
+print(wilcoxon_resultado)
+
+#grafico para visualizar
+
+boxplot(muestra$mejor.B, muestra$mejor.C,
+        names = c("version B", "version C"),
+        main = "comparación de Rendimiento",
+        ylab = "porcentaje de cercania con la óptima",
+        col = c("skyblue", "salmon"))
+
+
+cat("\n")
+```
+
+#Conclusión
+La prueba de Wilcoxon para muestras pareadas indica que existe una diferencia significativa entre los rendimientos de las versiones B y C. Esto sugiere que la memorista tiene razón al sospechar que las mejores soluciones encontradas por ambas versiones tienen rendimientos distintos.
+
+### Pregunta 3
+> La memorista sospecha que hay diferencias significativas en el tiempo de ejecución entre las versiones del algoritmo cuando las instancias de prueba tienen 60 o más nodos. ¿Los datos respaldan la intuición de la memorista? Para responder, filtren los datos para tener las instancias con 60 o más nodos y seleccionen las columnas con los tiempos de ejecución registrados (en formato ancho). Usando como semilla el valor 31, obtengan muestras aleatorias independientes de 15, 14 y 13 tiempos registrados por las versiones A, B y C, respectivamente. Realicen un análisis estadístico pertinente (enunciar hipótesis, revisar condiciones, seleccionar pruebas ómnibus y post-hoc según corresponda) para responder la pregunta planteada, utilizando pruebas no paramétricas de ser necesario.
+
+```{r}
+#Cargar librerías
+library(dplyr)
+library(ggplot2)
+library(FSA)         # Para test post-hoc de Dunn
+library(rcompanion)  # Para compatibilidad de Dunn's test
+
+#datos
+datos <- read.csv("EP07 Datos.csv")
+
+#filtrar instancias con 60 o mas nodos y seleccionar tiempos
+tiempos <- datos %>%
+  filter(n.nodos >= 60) %>%
+  select(tiempo.A, tiempo.B, tiempo.C)
+
+#fijar semilla y tomar las muestras
+set.seed(31)
+muestra_A <- tiempos$tiempo.A %>% sample(15)
+muestra_B <- tiempos$tiempo.B %>% sample(14)
+muestra_C <- tiempos$tiempo.C %>% sample(13)
+
+#crear data frame largo para análisis
+muestra <- data.frame(
+  tiempo = c(muestra_A, muestra_B, muestra_C),
+  version = factor(c(
+    rep("A", 15),
+    rep("B", 14),
+    rep("C", 13))))
+
+#prueba de normalidad por grupo
+cat("Prueba de normalidad por versión:\n")
+by(muestra$tiempo, muestra$version, shapiro.test)
+
+#grafico de tiempos
+ggplot(muestra, aes(x = version, y = tiempo, fill = version)) +
+  geom_boxplot() +
+  labs(title = "Comparación de tiempos de ejecución por versión",
+       y = "Tiempo (ms)", x = "Versión") +
+  theme_minimal()
+
+#Prueba de Kruskal-Wallis
+kw_resultado <- kruskal.test(tiempo ~ version, data = muestra)
+cat("\nResultado de la prueba de Kruskal-Wallis:\n")
+print(kw_resultado)
+
+#Test post-hoc de Dunn si Kruskal-Wallis es significativo
+if (kw_resultado$p.value < 0.05) {
+  cat("\nDado que el p-valor es menor a 0.05, realizamos comparación post-hoc (Dunn):\n")
+  dunn_resultado <- dunnTest(tiempo ~ version, data = muestra, method = "bonferroni")
+  print(dunn_resultado)
+}
+cat("\n")
+```
+
+#conclusion
+La prueba de Kruskal-Wallis indica que hay diferencias significativas entre al menos dos versiones del algoritmo. El test post-hoc de Dunn revela que la versión A es significativamente más rápida que la versión C, pero no hay diferencias significativas entre las versiones A y B, ni entre B y C. Esto sugiere que la versión A es la más eficiente en términos de tiempo de ejecución para instancias con 60 o más nodos.
+
+### Pregunta 4
+> La memorista también sospecha que, al comparar las mismas instancias con iguales características, las mejores soluciones encontradas por las diferentes versiones del algoritmo tienen rendimientos distintos. ¿Estará en lo cierto? Para responder, filtren los datos para tener las instancias con 60 o más nodos y seleccionen las columnas con los mejores rendimientos registrados. Usando como semilla el valor 73, obtengan una muestra aleatoria de 22 instancias. Realicen un análisis estadístico pertinente (enunciar hipótesis, revisar condiciones, seleccionar pruebas ómnibus y post-hoc según corresponda) para responder la pregunta planteada, utilizando pruebas no paramétricas de ser necesario.
+
+En primer lugar se filtran y se sacan muestras de los datos.
+
+```{r}
+instancias60 <- datos[datos$n.nodos >= 60, ]
+
+set.seed(73)
+muestraA <- sample(instancias60$mejor.A, 22)
+muestraB <- sample(instancias60$mejor.B, 22)
+muestraC <- sample(instancias60$mejor.C, 22)
+```
+
+Luego, al tener tres muestras independientes del mismo dataset, se estima pertinente hacer un análisis no paramétrico para las 3 muestras se hará un test de Kruskal-Walis.
+
+Las hipótesis a contrastar son:
+
+- $H_0$: No existen diferencias significativas entre los mejores tiempos de ejecución para las versiones A, B y C del algoritmo genético.
+- $H_A$: Hay diferencias significativas entre por lo menos uno los mejores tiempos de ejecución para las versiones A, B y C del algoritmo genético.
+
+Ántes, se verifican las condiciones:
+- Escala ordinal de la variable mejor tiempo.
+- Observaciones son independientes entre sí.
+- La variable independiente tiene por lo menos dos niveles.
+
+```{r}
+tiempo <- c(muestraA, muestraB, muestraC)
+criterio <- c(rep("A", length(muestraA)), rep("B", length(muestraB)), rep("C", length(muestraC)))
+criterio <- factor(criterio)
+datos <- data.frame(tiempo, criterio)
+
+prueba <- kruskal.test(tiempo ~ criterio, data = datos)
+print(prueba)
+pvalorkruskal = prueba$p.value
+```
+
+Así, con la prueba hecha obtenemos un p-valor de $`r pvalorkruskal`$, vemos que entre los mejores tiempos entre las versiones A, B y C existen una diferencia significativa.
+
+Con este resultado, vemos pertinente hacer un procedimiento post-hoc de Benjamini-Hochberg:
+
+```{r}
+posthoc <- pairwise.wilcox.test(datos[["tiempo"]],datos[["criterio"]] , p.adjust.method = "BH", paired = FALSE, exact=FALSE)
+print(posthoc)
+```
+
+Finalmente, con el análisis estadístico ómnibus se concluye que la mayor diferencia existe entre el algoritmo A y B, un p-valor de $0.0093$.
