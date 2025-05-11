@@ -1,0 +1,38 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-03-30"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+Se encontró que las nuevas y los nuevos estudiantes de Educación Física no están llegando con la preparación requerida. Se ha iniciado un programa piloto con 24 estudiantes que están comenzando esta carrera en que se someten a prolongados ejercicios de saltar la cuerda. En teoría,este programa debería mejorar su resistencia y bajar sus tiempos en completar 1.500 metros planos, que exhiben una distribución aproximadamente normal con desviación estándar de 14 [s]. El estudio tiene planificado emplear una prueba t con 99 % confianza para determinar si hay una diferencia significativa en los tiempos registrados antes y después del programa
+
+1. ¿Que potencia tiene la prueba si se quiere detectar una reducción de 8 segundos
+2. ¿Qué tamaño debe tener el conjunto de estudiantes adscritos al programa si se desea obtener 80% de potencia para este resultado del programa?
+3. ¿Cuánto varía este tamaño si la hipótesis alternativa se cambia a que los tiempos se redujeron en mas de 8 segundos?
+
+
+```{r cars}
+library(effsize)
+library(pwr)
+
+
+factor <- pwr.t.test(n = 24, d= (2-8)/14, sig.level = 0.01,type = "paired", alternative = "two.sided")
+
+print(factor)
+
+
+factorR <- pwr.t.test( d= (2-8)/14, sig.level = 0.01,power=0.80,type = "paired", alternative = "two.sided")
+
+print(factorR)
+  
+factorA <- pwr.t.test(n = 24, d= (2-8)/14, sig.level = 0.01,type = "paired", alternative = "less")
+
+print(factorA)
+
+```

@@ -1,0 +1,57 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-04-18"
+---
+
+
+```{r}
+library(emmeans)
+library(ez)
+library(tidyr)
+library(dplyr)
+library(DescTools)
+#library(nlme)
+
+#Largo para 16 valores
+largo <- factor (1:16)
+Rock = c(16, 17.5, 15.2, 14.2, 15, 16.5, 14, 17.6, 16.1, 15.7, 14, 18, 19, 15, 17, 14.8)
+
+Pop = c(14.3, 13, 10.9, 11.7, 13.3, 14, 12.8, 15.2, 13.9, 14, 12.2, 15.6, 13.5, 11.9, 14.1, 13)
+
+Reggaeton = c(18.1, 21.8, 19.8, 17, 20.5, 21, 24, 22, 20, 18.7, 19.3, 23, 20.1, 19, 21, 18)
+
+
+
+datos <- data.frame(largo,Rock,Pop,Reggaeton)
+datos_largos <- datos |> pivot_longer(-largo,names_to="Genero", values_to="Tiempos") |> mutate (Genero = factor(Genero))
+
+print(datos)
+summary(datos_largos)
+
+prueba <- aov(Tiempos ~ Genero, data = datos_largos)
+print(summary(prueba))
+
+
+prueba2 <- ezANOVA(data=datos_largos,dv=Tiempos ,wid= largo, within = Genero)
+print(prueba2)
+
+alfa <- 0.025
+
+scheffe <- ScheffeTest(x = prueba, which="Genero",conf.level= 1- alfa)
+print(scheffe)
+
+
+
+
+holm <- pairwise.t.test(datos_largos[["Tiempos"]],datos_largos[["Genero"]],p.adj="holm",paired=TRUE,conf.level= 1 -alfa)
+print(holm)
+
+
+#mixto <- lme ( Tiempos ~ Genero , data = datos_largos , random = ~ 1| largo )
+#medias <- emmeans(mixto,"Genero")
+
+#hsd <- contrast(medias ,method ="pairwise",adjust="tukey")
+#print ( hsd , infer = TRUE , level = 1 - alfa )
+
+```
